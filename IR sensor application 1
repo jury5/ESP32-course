@@ -1,0 +1,32 @@
+// تعريف الدبابيس
+const int irLedPin = 4;      // دبوس المرسل
+const int irRecvPin = 15;    // دبوس المستقبل
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(irLedPin, OUTPUT);
+  pinMode(irRecvPin, INPUT);
+
+  // تشغيل المرسل باستمرار ليرسل شعاعاً دائماً
+  digitalWrite(irLedPin, HIGH);
+  
+  Serial.println("--- IR Connection Test Started ---");
+}
+
+void loop() {
+  // قراءة حالة المستقبل
+  // ملاحظة: معظم المستقبلات تعطي LOW (0) عند رؤية الإشارة 
+  // لذلك سنقوم بعكس القراءة لتظهر 1 عند وجود إشارة
+  int sensorValue = digitalRead(irRecvPin);
+  
+  if (sensorValue == LOW) {
+    // تم اكتشاف الإشارة
+    Serial.println("1");
+  } else {
+    // لا توجد إشارة
+    Serial.println("0");
+  }
+
+  delay(100); // تأخير بسيط لسهولة القراءة في الشاشة
+}
