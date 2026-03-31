@@ -1,0 +1,64 @@
+// تعريف الدبابيس
+const int irLedPin = 4;      // المرسل
+const int irRecvPin = 15;    // المستقبل
+const int relayPin = 26;     // المرحل (لصوت التلغراف)
+
+// إعدادات التوقيت لشيفرة مورس (بالملي ثانية)
+const int dotDuration = 200; 
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(irLedPin, OUTPUT);
+  pinMode(irRecvPin, INPUT);
+  pinMode(relayPin, OUTPUT);
+  
+  Serial.println("--- IR Morse Station Started ---");
+}
+
+// وظيفة إرسال نبضة مورس (نقطة أو شرطة)
+void sendMorsePulse(int duration) {
+  digitalWrite(irLedPin, HIGH);   // تشغيل الأشعة
+  delay(duration);
+  digitalWrite(irLedPin, LOW);    // إطفاء الأشعة
+  delay(dotDuration);             // فراغ بسيط
+}
+
+// وظيفة إرسال حرف كامل
+void sendLetter(String morse) {
+  for (int i = 0; i < morse.length(); i++) {
+    if (morse[i] == '.') sendMorsePulse(dotDuration);
+    else if (morse[i] == '-') sendMorsePulse(dotDuration * 3);
+  }
+  delay(dotDuration * 2); // فراغ بين الحروف
+}
+
+void loop() {
+  // --- الجزء الأول: الإرسال (Sender) ---
+  // سنرسل حرف "H" كمثال في كل دورة
+  Serial.println("Sending: H (....)");
+  sendLetter("...."); 
+
+  // --- الجزء الثاني: الاستقبال المعالج (Receiver) ---
+  // نتحقق إذا كان المستقبل يرى إشارة الآن
+  if (digitalRead(irRecvPin) == LOW) {
+    digitalWrite(relayPin, HIGH); // تشغيل المرحل (صوت تكة)
+    
+    long startTime = millis();
+    while (digitalRead(irRecvPin) == LOW); // انتظر انتهاء النبضة
+    long pulseWidth = millis() - startTime;
+    
+    digitalWrite(relayPin, LOW); // إطفاء المرحل
+
+    // تحليل هل هي نقطة أم شرطة
+    if (pulseWidth > 50 && pulseWidth < 300) Serial.print(".");
+    else if (pulseWidth >= 300) Serial.print("-");
+  }
+
+  // إضافة سطر جديد إذا توقف الإرسال لفترة
+  static long lastSignal = 0;
+  if (digitalRead(irRecvPin) == LOW) lastSignal = millis();
+  if (millis() - lastSignal > 1000 && lastSignal != 0) {
+    Serial.println(" [Received]");
+    lastSignal = 0;
+  }
+}
