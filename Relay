@@ -1,0 +1,20 @@
+// تعريف الدبوس المتصل بالمرحل
+const int relayPin = 26; 
+
+void setup() {
+  // ضبط الدبوس كمخرج
+  pinMode(relayPin, OUTPUT);
+  
+  // نبدأ بإطفاء المصباح (غالباً 0 يطفئ و 1 يشغل)
+  digitalWrite(relayPin, LOW); 
+}
+
+void loop() {
+  // تشغيل المصباح بإرسال 1 (High)
+  digitalWrite(relayPin, HIGH);
+  delay(5000); // يبقى يعمل لمدة 5 ثوانٍ
+  
+  // إطفاء المصباح بإرسال 0 (Low)
+  digitalWrite(relayPin, LOW);
+  delay(5000); // يبقى مطفأ لمدة 5 ثوانٍ
+}
