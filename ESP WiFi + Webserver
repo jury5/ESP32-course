@@ -1,0 +1,65 @@
+#include <WiFi.h>
+
+// إعدادات الشبكة الخاصة بالـ ESP32
+const char* ssid = "ESP32_Hello_Network";
+const char* password = "password123";
+
+// إنشاء خادم ويب على المنفذ 80 (المنفذ القياسي للمتصفحات)
+WiFiServer server(80);
+
+void setup() {
+  Serial.begin(115200);
+
+  // تشغيل الـ ESP32 كنقطة وصول (Access Point)
+  Serial.println("Starting Access Point...");
+  WiFi.softAP(ssid, password);
+
+  // الحصول على عنوان الـ IP (غالباً سيكون 192.168.4.1)
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("Connect to this IP: ");
+  Serial.println(IP);
+
+  server.begin();
+}
+
+void loop() {
+  // انتظار اتصال "زبون" (هاتف أو لابتوب)
+  WiFiClient client = server.available();
+
+  if (client) {
+    Serial.println("New client connected!");
+    String currentLine = "";
+    
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          if (currentLine.length() == 0) {
+            // إرسال الرد للمتصفح
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println();
+
+            // محتوى الصفحة التي سيراها المستخدم
+            client.println("<html>");
+            client.println("<body style='font-family: Arial; text-align: center; margin-top: 50px;'>");
+            client.println("<h1 style='color: #007bff;'>Hello from ESP32!</h1>");
+            client.println("<p style='font-size: 20px;'>Welcome to your first Wireless Project.</p>");
+            client.println("<p>The system is working perfectly without a USB cable.</p>");
+            client.println("</body>");
+            client.println("</html>");
+            
+            break;
+          } else {
+            currentLine = "";
+          }
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    }
+    // إغلاق الاتصال
+    client.stop();
+    Serial.println("Client disconnected.");
+  }
+}
