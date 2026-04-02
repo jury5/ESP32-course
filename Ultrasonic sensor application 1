@@ -1,0 +1,36 @@
+const int trigPin = 5;
+const int echoPin = 18;
+
+// تعريف سرعة الصوت بالسنتيمتر/ميكروثانية
+#define SOUND_SPEED 0.034
+
+long duration;
+float distanceCm;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT); // ضبط Trigger كمخرج
+  pinMode(echoPin, INPUT);  // ضبط Echo كمدخل
+}
+
+void loop() {
+  // إرسال نبضة Trig
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  // قراءة زمن عودة الموجة بالميكروثانية
+  duration = pulseIn(echoPin, HIGH);
+  
+  // حساب المسافة
+  distanceCm = duration * SOUND_SPEED / 2;
+  
+  // طباعة النتيجة
+  Serial.print("Distance: ");
+  Serial.print(distanceCm);
+  Serial.println(" cm");
+  
+  delay(500);
+}
