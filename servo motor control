@@ -1,0 +1,19 @@
+#include <ESP32Servo.h>
+
+Servo myServo;      // إنشاء كائن للسيرفو
+int servoPin = 18;  // الدبوس المتصل بسلك الإشارة
+
+void setup() {
+  myServo.attach(servoPin); // ربط السيرفو بالدبوس 18
+}
+
+void loop() {
+  myServo.write(0);   // التحرك لزاوية 0
+  delay(1000);
+  
+  myServo.write(90);  // التحرك لزاوية 90
+  delay(1000);
+  
+  myServo.write(180); // التحرك لزاوية 180
+  delay(1000);
+}
