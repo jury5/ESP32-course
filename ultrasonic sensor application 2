@@ -1,0 +1,50 @@
+// تعريف الدبابيس
+const int trigPin = 5;
+const int echoPin = 18;
+const int relayPin = 26;
+
+// المسافة المطلوبة لتفعيل المرحل (بالسنتيمتر)
+const int thresholdDistance = 20; 
+
+void setup() {
+  Serial.begin(115200);
+  
+  // إعداد الدبابيس
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(relayPin, OUTPUT);
+  
+  // التأكد من أن المرحل مطفأ في البداية
+  digitalWrite(relayPin, LOW); 
+  
+  Serial.println("System Ready!");
+}
+
+void loop() {
+  // 1. إرسال نبضة الحساس
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // 2. حساب زمن الصدى
+  long duration = pulseIn(echoPin, HIGH);
+  
+  // 3. تحويل الزمن إلى مسافة
+  float distance = duration * 0.034 / 2;
+
+  // 4. المنطق (Logic)
+  if (distance > 0 && distance < thresholdDistance) {
+    // إذا كان الجسم قريب، شغل المرحل
+    digitalWrite(relayPin, HIGH);
+    Serial.print("OBJECT DETECTED! Distance: ");
+    Serial.println(distance);
+  } 
+  else {
+    // إذا ابتعد الجسم، أطفئ المرحل
+    digitalWrite(relayPin, LOW);
+  }
+
+  delay(100); // سرعة استجابة الحساس
+}
