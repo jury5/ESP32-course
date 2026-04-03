@@ -1,0 +1,104 @@
+// كود المرسل
+//  هذا الجهاز سينتظر منك كتابة رسالة في الـسيريال مونيتور ، ثم يرسلها فور ضغطك على انتر
+
+
+#include <esp_now.h>
+#include <WiFi.h>
+
+// ملاحظة هامة: ضع هنا عنوان MAC الخاص بالجهاز "المستقبل" الذي حصلت عليه سابقاً
+uint8_t receiverAddress[] = {0x24, 0x0A, 0xC4, 0xAE, 0x12, 0x34}; 
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تفعيل الواي فاي في وضع المحطة (ضروري لبروتوكول ESP-NOW)
+  WiFi.mode(WIFI_STA);
+
+  // تهيئة بروتوكول ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("خطأ في تشغيل ESP-NOW");
+    return;
+  }
+
+  // تعريف الجهاز المستقبل (Peer Info)
+  esp_now_peer_info_t peerInfo;
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+
+  // إضافة المستقبل إلى قائمة الاتصال
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("فشل في إضافة الجهاز المستقبل");
+    return;
+  }
+
+  Serial.println("اكتب رسالتك في Serial Monitor واضغط Enter للإرسال:");
+}
+
+void loop() {
+  // التحقق مما إذا كان المستخدم قد كتب شيئاً في الـ Serial Monitor
+  if (Serial.available() > 0) {
+    // قراءة الرسالة حتى نهاية السطر
+    String incomingMsg = Serial.readStringUntil('\n');
+    
+    // تحويل النص إلى مصفوفة بايتات لإرسالها
+    int msgLen = incomingMsg.length() + 1;
+    char messageArray[250]; // أقصى حجم لـ ESP-NOW هو 250 بايت
+    incomingMsg.toCharArray(messageArray, msgLen);
+
+    // إرسال الرسالة عبر ESP-NOW
+    esp_err_t result = esp_now_send(receiverAddress, (uint8_t *) messageArray, msgLen);
+    
+    if (result == ESP_OK) {
+      Serial.print("تم الإرسال بنجاح: ");
+      Serial.println(incomingMsg);
+    } else {
+      Serial.println("حدث خطأ أثناء الإرسال");
+    }
+  }
+}
+
+
+
+
+
+// كود المستقبل
+// هذا الجهاز سيظل في حالة "استماع" دائم، وبمجرد وصول رسالة، سيقوم بطباعتها فوراً.
+
+#include <esp_now.h>
+#include <WiFi.h>
+
+// دالة النداء (Callback): يتم استدعاؤها تلقائياً عند وصول أي بيانات
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  // تحويل البيانات القادمة إلى مصفوفة حروف (Char) لعرضها كنص
+  char message[len];
+  memcpy(message, incomingData, len);
+  
+  Serial.print("وصلت رسالة جديدة: ");
+  Serial.println(message);
+  Serial.println("-------------------------");
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  // تشغيل الواي فاي
+  WiFi.mode(WIFI_STA);
+
+  // تهيئة ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("خطأ في تهيئة بروتوكول ESP-NOW");
+    return;
+  }
+  
+  // تسجيل الدالة المسؤولة عن الاستقبال
+  // بمجرد وصول بيانات، سيتم تنفيذ كود OnDataRecv أعلاه
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+
+  Serial.println("في انتظار استقبال الرسائل...");
+}
+
+void loop() {
+  // لا يحتاج المستقبل للقيام بأي شيء في الـ loop
+  // الاستقبال يتم عبر "المقاطعات" (Interrupts) في الخلفية
+}
