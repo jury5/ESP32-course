@@ -1,0 +1,62 @@
+#include <esp_now.h>
+#include <WiFi.h>
+
+// ضع هنا عنوان MAC الخاص بالجهاز الثاني (Device B)
+uint8_t peerAddress[] = {0x24, 0x0A, 0xC4, 0xAE, 0x12, 0x34};
+
+// دالة يتم استدعاؤها عند استقبال رسالة
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  char incomingMsg[len + 1];
+  memcpy(incomingMsg, incomingData, len);
+  incomingMsg[len] = '\0'; // إنهاء النص بصفر برمجياً
+  
+  Serial.print("\n[رسالة واردة]: ");
+  Serial.println(incomingMsg);
+}
+
+// دالة للتأكد من نجاح الإرسال
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    Serial.println("!-- فشل في توصيل الرسالة --!");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA); // تفعيل الواي فاي
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("خطأ في تشغيل ESP-NOW");
+    return;
+  }
+
+  // تسجيل دوال الإرسال والاستقبال
+  esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+
+  // تسجيل الجهاز الثاني كـ Peer
+  esp_now_peer_info_t peerInfo;
+  memcpy(peerInfo.peer_addr, peerAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("فشل في إضافة الطرف الآخر");
+    return;
+  }
+
+  Serial.println("--- النظام جاهز للدردشة ثنائية الاتجاه ---");
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String msg = Serial.readStringUntil('\n');
+    int msgLen = msg.length();
+    
+    // إرسال النص المكتوب إلى الجهاز الآخر
+    esp_now_send(peerAddress, (uint8_t *) msg.c_str(), msgLen);
+    
+    Serial.print("[أنت]: ");
+    Serial.println(msg);
+  }
+}
