@@ -1,7 +1,6 @@
 #include <WiFi.h> // استدعاء مكتبة الواي فاي الضرورية للوصول لمعلومات الشبكة
 
 void setup() {
-  // بدء الاتصال التسلسلي (Serial Monitor) بسرعة 115200 بت في الثانية
   Serial.begin(115200);
   
   // تفعيل وضع المحطة (Station Mode)
@@ -12,8 +11,6 @@ void setup() {
   Serial.println("------------------------------------------");
   Serial.print("ESP32 MAC Address: ");
   
-  // الدالة WiFi.macAddress() تعيد عنوان الماك كـ String
-  // هذا هو العنوان الذي ستحتاجه لاستخدامه في أكواد ESP-NOW
   Serial.println(WiFi.macAddress());
   Serial.println("------------------------------------------");
 }
