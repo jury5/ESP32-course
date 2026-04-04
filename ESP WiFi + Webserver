@@ -1,65 +1,81 @@
 #include <WiFi.h>
 
-// إعدادات الشبكة الخاصة بالـ ESP32
-const char* ssid = "ESP32_Hello_Network";
-const char* password = "password123";
-
-// إنشاء خادم ويب على المنفذ 80 (المنفذ القياسي للمتصفحات)
 WiFiServer server(80);
 
 void setup() {
   Serial.begin(115200);
-
-  // تشغيل الـ ESP32 كنقطة وصول (Access Point)
-  Serial.println("Starting Access Point...");
-  WiFi.softAP(ssid, password);
-
-  // الحصول على عنوان الـ IP (غالباً سيكون 192.168.4.1)
-  IPAddress IP = WiFi.softAPIP();
-  Serial.print("Connect to this IP: ");
-  Serial.println(IP);
-
+  
+  // Start Access Point
+  WiFi.softAP("ESP32_Chat", "12345678");
+  Serial.println(WiFi.softAPIP()); // Usually 192.168.4.1
+  
   server.begin();
 }
 
 void loop() {
-  // انتظار اتصال "زبون" (هاتف أو لابتوب)
-  WiFiClient client = server.available();
+  WiFiClient client = server.available(); // Check for a visitor
 
   if (client) {
-    Serial.println("New client connected!");
-    String currentLine = "";
-    
+    while (client.connected() && !client.available()); // Wait for data
+    client.flush(); // Clear the incoming request
+
+    // Send HTTP Response
+    client.print("HTTP/1.1 200 OK\nContent-type:text/html\n\n");
+    client.print("<h1>Hello!</h1><p>Working perfectly.</p>");
+
+    delay(10);      // Give the browser time to receive
+    client.stop();  // Close connection
+  }
+}
+
+// ESP Webserver Groupchat
+#include <WiFi.h>
+
+WiFiServer server(80);
+String chatHistory = "--- Chat Started ---<br>";
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.softAP("ESP32_Chat", "12345678");
+  server.begin();
+}
+
+void loop() {
+  // 1. Check for messages from the Serial Monitor (The ESP32 user)
+  if (Serial.available() > 0) {
+    String serialMsg = Serial.readStringUntil('\n');
+    chatHistory += "<b>ESP32:</b> " + serialMsg + "<br>";
+    Serial.println("Sent to web!");
+  }
+
+  // 2. Check for messages from the Web Browser
+  WiFiClient client = server.available();
+  if (client) {
+    String request = "";
     while (client.connected()) {
       if (client.available()) {
         char c = client.read();
-        if (c == '\n') {
-          if (currentLine.length() == 0) {
-            // إرسال الرد للمتصفح
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-
-            // محتوى الصفحة التي سيراها المستخدم
-            client.println("<html>");
-            client.println("<body style='font-family: Arial; text-align: center; margin-top: 50px;'>");
-            client.println("<h1 style='color: #007bff;'>Hello from ESP32!</h1>");
-            client.println("<p style='font-size: 20px;'>Welcome to your first Wireless Project.</p>");
-            client.println("<p>The system is working perfectly without a USB cable.</p>");
-            client.println("</body>");
-            client.println("</html>");
-            
-            break;
-          } else {
-            currentLine = "";
-          }
-        } else if (c != '\r') {
-          currentLine += c;
-        }
+        request += c;
+        if (c == '\n' && request.endsWith("\r\n\r\n")) break; // Header end
       }
     }
-    // إغلاق الاتصال
+
+    // If browser sent a message (via URL parameter ?msg=...)
+    if (request.indexOf("GET /?msg=") != -1) {
+      int start = request.indexOf("msg=") + 4;
+      int end = request.indexOf(" ", start);
+      String webMsg = request.substring(start, end);
+      webMsg.replace("+", " "); // Fix spaces in URLs
+      chatHistory += "<b>Guest:</b> " + webMsg + "<br>";
+    }
+
+    // Send the Web Page
+    client.print("HTTP/1.1 200 OK\nContent-type:text/html\n\n");
+    client.print("<h2>ESP32 Group Chat</h2>");
+    client.print("<div style='border:1px solid; height:200px; overflow:scroll;'>" + chatHistory + "</div>");
+    client.print("<form action='/' method='get'><input name='msg'><input type='submit' value='Send'></form>");
+    client.print("<script>setTimeout(() => { location.reload(); }, 3000);</script>"); // Auto-refresh every 3s
+
     client.stop();
-    Serial.println("Client disconnected.");
   }
 }
