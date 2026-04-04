@@ -3,52 +3,29 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// عنوان البث العام (FF:FF:FF:FF:FF:FF) يرسل للجميع دون استثناء
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  // ملاحظة: عند الإرسال للجميع (Broadcast)، الحالة تعني فقط أن الرسالة خرجت من الجهاز
-  Serial.print("\r\nحالة إرسال الحزمة الأخيرة: ");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "تم الإرسال بنجاح" : "فشل الإرسال");
-}
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_STA); // تشغيل الواي فاي
+  WiFi.mode(WIFI_STA);
+  esp_now_init(); // تشغيل البروتوكول فقط
 
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("خطأ في تشغيل ESP-NOW");
-    return;
-  }
-
-  // تسجيل وظيفة مراقبة حالة الإرسال
-  esp_now_register_send_cb(OnDataSent);
-
-  // إعداد بيانات "البير" (Peer) كبث عام
-  esp_now_peer_info_t peerInfo;
+  // إعداد بيانات البث المباشر
+  esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;  
-  peerInfo.encrypt = false;
-
-  // إضافة عنوان البث لقائمة الاتصال
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("فشل في إعداد البث العام");
-    return;
-  }
+  esp_now_add_peer(&peerInfo);
 }
 
 void loop() {
   if (Serial.available() > 0) {
-    // قراءة النص من المستخدم
     String msg = Serial.readStringUntil('\n');
-    
-    // إرسال النص لكل الأجهزة التابعة (Slaves)
+    // الإرسال مباشرة بدون مراقبة الحالة
     esp_now_send(broadcastAddress, (uint8_t *) msg.c_str(), msg.length());
-    
-    Serial.print("تم بث الرسالة لجميع التابعين: ");
-    Serial.println(msg);
+    Serial.println("تم الإرسال: " + msg);
   }
 }
+
+
 
 
 
@@ -56,40 +33,25 @@ void loop() {
 #include <esp_now.h>
 #include <WiFi.h>
 
-// دالة النداء: تعمل فور استقبال رسالة من "الماستر"
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  char message[len + 1];
-  memcpy(message, incomingData, len);
-  message[len] = '\0'; // إغلاق النص
-  
-  Serial.print("رسالة واردة من الماستر: ");
-  Serial.println(message);
-  
-  // مثال: إذا كانت الرسالة "ON" قم بتشغيل مؤشر LED
-  if (String(message) == "ON") {
-    digitalWrite(2, HIGH); // تشغيل الليد المدمج
-  } else if (String(message) == "OFF") {
-    digitalWrite(2, LOW); // إطفاء الليد المدمج
-  }
+// دالة الاستقبال: تحويل البيانات القادمة إلى نص وطباعته
+void OnDataRecv(const uint8_t * mac, const uint8_t *data, int len) {
+  char msg[len + 1];
+  memcpy(msg, data, len);
+  msg[len] = '\0'; // إنهاء النص برمجياً لضمان قراءته بشكل صحيح
+
+  Serial.println(msg); // طباعة الرسالة المستلمة فقط
 }
 
 void setup() {
   Serial.begin(115200);
-  pinMode(2, OUTPUT); // إعداد الليد المدمج كخرج
   
-  WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_STA); // تفعيل الواي فاي (ضروري لعمل البروتوكول)
+  esp_now_init();      // تشغيل بروتوكول ESP-NOW
 
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("خطأ في تهيئة ESP-NOW");
-    return;
-  }
-
-  // تسجيل وظيفة الاستقبال
+  // ربط الدالة بالبروتوكول لتعمل عند وصول أي بيانات
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-
-  Serial.println("الجهاز التابع (Slave) جاهز لاستقبال الأوامر...");
 }
 
 void loop() {
-  // الأجهزة التابعة تنتظر الإشارة لاسلكياً ولا تحتاج لكود هنا
+  // لا يحتاج لكود هنا، الاستقبال يتم تلقائياً في الخلفية
 }
