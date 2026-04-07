@@ -1,0 +1,56 @@
+// تعريف دبابيس الحساسات (المستقبلات - Receivers)
+const int receiver1 = 18; 
+const int receiver2 = 19; 
+
+// تعريف دبابيس أجهزة الإرسال (المرسلات - Senders)
+const int sender1 = 12;
+const int sender2 = 13;
+
+// تعريف دبوس الرولي للمصباح
+const int relayPin = 5; 
+
+int counter = 0; // عداد الأشخاص
+
+void setup() {
+  Serial.begin(115200);
+  
+  // إعداد المستقبلات كمدخلات
+  pinMode(receiver1, INPUT);
+  pinMode(receiver2, INPUT);
+  
+  // إعداد المرسلات كمخرجات وتشغيلها فوراً
+  pinMode(sender1, OUTPUT);
+  pinMode(sender2, OUTPUT);
+  digitalWrite(sender1, HIGH); // تشغيل شعاع الحساس الأول
+  digitalWrite(sender2, HIGH); // تشغيل شعاع الحساس الثاني
+  
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW); // المصباح مطفأ في البداية
+}
+
+void loop() {
+  // حالة الدخول: قطع الشعاع الأول ثم الثاني
+  if (digitalRead(receiver1) == LOW) {
+    while(digitalRead(receiver2) == HIGH); 
+    counter++; 
+    Serial.println("Entry detected. Total: " + String(counter));
+    while(digitalRead(receiver2) == LOW); 
+    delay(500); 
+  }
+
+  // حالة الخروج: قطع الشعاع الثاني ثم الأول
+  else if (digitalRead(receiver2) == LOW) {
+    while(digitalRead(receiver1) == HIGH); 
+    if (counter > 0) counter--; 
+    Serial.println("Exit detected. Total: " + String(counter));
+    while(digitalRead(receiver1) == LOW); 
+    delay(500);
+  }
+
+  // التحكم في المصباح
+  if (counter > 0) {
+    digitalWrite(relayPin, HIGH); 
+  } else {
+    digitalWrite(relayPin, LOW);  
+  }
+}
