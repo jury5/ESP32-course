@@ -1,0 +1,51 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// Network credentials
+const char* ssid = "YOUR_SSID";
+const char* password = "YOUR_PASSWORD";
+
+const int relayPin = 5;
+WebServer server(80);
+
+// HTML Page with two buttons
+String getHTML() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Smart Home</title>";
+  html += "<style>button { width: 100px; height: 50px; font-size: 20px; cursor: pointer; }</style></head>";
+  html += "<body><h1>ESP32 Control</h1>";
+  html += "<p><a href='/on'><button style='background-color:green; color:white;'>ON</button></a></p>";
+  html += "<p><a href='/off'><button style='background-color:red; color:white;'>OFF</button></a></p>";
+  html += "</body></html>";
+  return html;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW); // Start with Relay OFF
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  
+  Serial.println("\nConnected! IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Define Web Routes
+  server.on("/", []() { server.send(200, "text/html", getHTML()); });
+  
+  server.on("/on", []() {
+    digitalWrite(relayPin, HIGH);
+    server.send(200, "text/html", getHTML());
+  });
+
+  server.on("/off", []() {
+    digitalWrite(relayPin, LOW);
+    server.send(200, "text/html", getHTML());
+  });
+
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
