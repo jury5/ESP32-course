@@ -1,0 +1,33 @@
+#include <ESP32Servo.h>
+
+Servo myservo; 
+const int trig = 15;
+const int echo = 23;
+
+void setup() {
+  pinMode(trig, OUTPUT);
+  pinMode(echo, INPUT);
+  myservo.attach(5); // ربط المحرك بالمنفذ رقم 5
+}
+
+void loop() {
+  // إرسال نبضة صوتية
+  digitalWrite(trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+
+  // قياس وقت عودة النبضة وحساب المسافة بالسنتيمتر
+  long duration = pulseIn(echo, HIGH);
+  int distance = duration * 0.034 / 2;
+
+  // الشرط: إذا كانت المسافة 6 سم أو أقل
+  if (distance > 0 && distance <= 6) {
+    myservo.write(90); // تحريك المحرك لزاوية 90 درجة
+  } else {
+    myservo.write(0);  // العودة لزاوية 0 إذا ابتعد الجسم
+  }
+  
+  delay(100); // انتظر قليلاً قبل القياس التالي
+}
