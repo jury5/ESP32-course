@@ -1,10 +1,15 @@
+#include <ESP32Servo.h>
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h> // مكتبة قوية قادرة على تمكين نقل البيانات بسرعة عالية.
+
 //تعريف دبابيس التوصيل
-const int trigPin = 5;
-const int echoPin = 18;
-const int laserPin = 21;
-const int servoPin = 19;
+int trigPin = 5;
+int echoPin = 18;
+int laserPin = 21;
+int servoPin = 19;
 
 //تعريف المتغيرات والكائنات
+WiFiServer server(80);
 Servo myServo;             // إنشاء كائن للتحكم في محرك السيرفو.
 int currentAngle = 0;      // متغير لتخزين زاوية المحرك الحالية (يبدأ من الصفر)
 int stepAmount = 10;       // مقدار الخطوة التي يتحركها المحرك في كل مرة (10 درجات) لمنع الاهتزاز
