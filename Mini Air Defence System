@@ -1,13 +1,14 @@
-
+//تعريف دبابيس التوصيل
 const int trigPin = 5;
 const int echoPin = 18;
 const int laserPin = 21;
 const int servoPin = 19;
 
-Servo myServo;
-int currentAngle = 0;
-int stepAmount = 10; 
-long distance;
+//تعريف المتغيرات والكائنات
+Servo myServo;             // إنشاء كائن للتحكم في محرك السيرفو.
+int currentAngle = 0;      // متغير لتخزين زاوية المحرك الحالية (يبدأ من الصفر)
+int stepAmount = 10;       // مقدار الخطوة التي يتحركها المحرك في كل مرة (10 درجات) لمنع الاهتزاز
+long distance;             // متغير لتخزين المسافة المحسوبة بواسطة الحساس
 
 void setup() {
   Serial.begin(115200);
@@ -15,10 +16,10 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   pinMode(laserPin, OUTPUT);
-  myServo.attach(servoPin);
+  myServo.attach(servoPin);     //تعريف منفذ التحكم في محرك السيرفو وربطه بالمنفذ رقم 19
 
 void loop() {
-readSensor();
+readSensor();   // استدعاء وظيفة قراءة الحساس لتحديث قيمة المسافة في كل دورة للبرنامج
 
 }
 
