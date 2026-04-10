@@ -1,0 +1,51 @@
+
+const int trigPin = 5;
+const int echoPin = 18;
+const int laserPin = 21;
+const int servoPin = 19;
+
+Servo myServo;
+int currentAngle = 0;
+int stepAmount = 10; 
+long distance;
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(laserPin, OUTPUT);
+  myServo.attach(servoPin);
+
+void loop() {
+readSensor();
+
+}
+
+void readSensor() {
+  digitalWrite(trigPin, LOW);        // التأكد من إيقاف الإشارة تماماً لمدة ميكروثانيتين
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);       // إرسال نبضة صوتية مدتها 10 ميكروثانية
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);        // إيقاف الإرسال والبدء بانتظار العودة
+  
+  long duration = pulseIn(echoPin, HIGH); // قياس الزمن الذي استغرقه الصدى للعودة
+  distance = duration * 0.034 / 2;        // تحويل الزمن إلى مسافة بالسنتيمتر (السرعة × الزمن ÷ 2)
+  
+  if (distance == 0) distance = 400;      // إذا كانت القراءة خاطئة (صفر)، نعتبرها مسافة بعيدة جداً لتجنب الأخطاء
+}
+
+void moveServo() {
+  myServo.write(currentAngle);        // أمر المحرك بالتوجه إلى الزاوية الحالية
+  
+  currentAngle += stepAmount;         // زيادة الزاوية بمقدار الخطوة (مثلاً 10 درجات)
+
+  // إذا وصل المحرك إلى النهاية (180 درجة) أو البداية (0 درجة)، قم بعكس اتجاه الحركة
+  if (currentAngle <= 0 || currentAngle >= 180) {
+    stepAmount = -stepAmount; 
+  }
+}
+
+void fireLaser() {
+  digitalWrite(laserPin, HIGH);       // إرسال تيار كهربائي لمنفذ الليزر لتشغيله
+}
