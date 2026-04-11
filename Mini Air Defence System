@@ -1,57 +1,209 @@
 #include <ESP32Servo.h>
 #include <WiFi.h>
-#include <ESPAsyncWebServer.h> // مكتبة قوية قادرة على تمكين نقل البيانات بسرعة عالية.
+#include <ESPAsyncWebServer.h>
 
-//تعريف دبابيس التوصيل
+// Pins
 int trigPin = 5;
 int echoPin = 18;
 int laserPin = 21;
 int servoPin = 19;
 
-//تعريف المتغيرات والكائنات
-WiFiServer server(80);
-Servo myServo;             // إنشاء كائن للتحكم في محرك السيرفو.
-int currentAngle = 0;      // متغير لتخزين زاوية المحرك الحالية (يبدأ من الصفر)
-int stepAmount = 10;       // مقدار الخطوة التي يتحركها المحرك في كل مرة (10 درجات) لمنع الاهتزاز
-long distance;             // متغير لتخزين المسافة المحسوبة بواسطة الحساس
+// Variables
+String webCommand = "";
+bool isAutonomous = true;
+int fireCounter = 0;
+AsyncWebServer server(80);
+Servo myServo; 
+int currentAngle = 0; 
+int stepAmount = 5; 
+long distance;
+AsyncEventSource events("/events");
 
-void setup() {
-  Serial.begin(115200);
-  
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-  pinMode(laserPin, OUTPUT);
-  myServo.attach(servoPin);     //تعريف منفذ التحكم في محرك السيرفو وربطه بالمنفذ رقم 19
+// --- 1. THE HTML DESIGN ---
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Defense System Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { background-color: #0a0a0a; color: #00ff41; font-family: 'Courier New', monospace; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #radar-container { flex: 1; display: flex; align-items: center; justify-content: center; border-right: 2px solid #004400; }
+        canvas { max-width: 95%; filter: drop-shadow(0 0 10px #00ff41); }
+        #controls-container { width: 400px; display: flex; flex-direction: column; padding: 20px; background: #050505; }
+        .section { margin-bottom: 30px; }
+        .btn-group { display: flex; gap: 10px; }
+        button { background: transparent; border: 1px solid #00ff41; color: #00ff41; padding: 15px; cursor: pointer; text-transform: uppercase; font-weight: bold; flex: 1; }
+        button:hover { background: rgba(0, 255, 65, 0.2); }
+        #terminal { flex-grow: 1; background: rgba(0, 20, 0, 0.5); border: 1px solid #004400; padding: 10px; overflow-y: auto; font-size: 0.8rem; margin-bottom: 20px; }
+        .manual-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .shoot-btn { border-color: #ff0000; color: #ff0000; }
+    </style>
+</head>
+<body>
+    <div id="radar-container"><canvas id="radarCanvas"></canvas></div>
+    <div id="controls-container">
+        <div class="section">
+            <h3>SYSTEM MODE</h3>
+            <div class="btn-group">
+                <button onclick="setMode('MANUAL')">Manual</button>
+                <button onclick="setMode('AUTO')">Autonomous</button>
+            </div>
+        </div>
+        <div id="terminal"><div>[SYS] System Active...</div></div>
+        <div class="section">
+            <h3>WEAPON CONTROL</h3>
+            <div class="manual-grid">
+                <button onclick="sendCommand('LEFT')">LEFT</button>
+                <button class="shoot-btn" onclick="sendCommand('SHOOT')">SHOOT</button>
+                <button onclick="sendCommand('RIGHT')">RIGHT</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 600; canvas.height = 300;
+        let currentAngle = 0; let objectDistance = 0;
+        const source = new EventSource('/events');
+        source.addEventListener('radarData', function(e) {
+            const data = e.data.split(','); 
+            currentAngle = parseInt(data[0]);
+            objectDistance = parseInt(data[1]);
+            drawRadar();
+        }, false);
+        function drawRadar() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2; const cy = canvas.height; const radius = canvas.width / 2 - 20;
+            ctx.beginPath(); ctx.arc(cx, cy, radius, Math.PI, 2 * Math.PI); ctx.strokeStyle = '#004400'; ctx.stroke();
+            let scanRad = (currentAngle * Math.PI) / 180;
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - radius * Math.cos(scanRad), cy - radius * Math.sin(scanRad));
+            ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 3; ctx.stroke();
+            if(objectDistance > 0 && objectDistance < 100) {
+                let distPx = (objectDistance / 100) * radius;
+                ctx.beginPath(); ctx.arc(cx - distPx * Math.cos(scanRad), cy - distPx * Math.sin(scanRad), 8, 0, 2*Math.PI);
+                ctx.fillStyle = 'red'; ctx.fill();
+            }
+        }
+        function sendCommand(cmd) { fetch('/command?val=' + cmd); }
+        function setMode(mode) { fetch('/mode?val=' + mode); }
+    </script>
+</body>
+</html>
+)rawliteral"; 
 
-void loop() {
-readSensor();   // استدعاء وظيفة قراءة الحساس لتحديث قيمة المسافة في كل دورة للبرنامج
-
-}
+// --- 2. HARDWARE FUNCTIONS ---
 
 void readSensor() {
-  digitalWrite(trigPin, LOW);        // التأكد من إيقاف الإشارة تماماً لمدة ميكروثانيتين
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);       // إرسال نبضة صوتية مدتها 10 ميكروثانية
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);        // إيقاف الإرسال والبدء بانتظار العودة
-  
-  long duration = pulseIn(echoPin, HIGH); // قياس الزمن الذي استغرقه الصدى للعودة
-  distance = duration * 0.034 / 2;        // تحويل الزمن إلى مسافة بالسنتيمتر (السرعة × الزمن ÷ 2)
-  
-  if (distance == 0) distance = 400;      // إذا كانت القراءة خاطئة (صفر)، نعتبرها مسافة بعيدة جداً لتجنب الأخطاء
+  digitalWrite(trigPin, LOW); delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH); delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
+  distance = duration * 0.034 / 2;
+  if (distance <= 0) distance = 400;
 }
 
 void moveServo() {
-  myServo.write(currentAngle);        // أمر المحرك بالتوجه إلى الزاوية الحالية
-  
-  currentAngle += stepAmount;         // زيادة الزاوية بمقدار الخطوة (مثلاً 10 درجات)
-
-  // إذا وصل المحرك إلى النهاية (180 درجة) أو البداية (0 درجة)، قم بعكس اتجاه الحركة
+  myServo.write(currentAngle);
+  currentAngle += stepAmount;
   if (currentAngle <= 0 || currentAngle >= 180) {
-    stepAmount = -stepAmount; 
+    stepAmount = -stepAmount;
+  }
+}
+
+void moveServoLeft() {
+  if (currentAngle > 0) {
+    currentAngle -= 5; // Step size for manual movement
+    myServo.write(currentAngle);
+    delay(15);
+  }
+}
+
+void moveServoRight() {
+  if (currentAngle < 180) {
+    currentAngle += 5;
+    myServo.write(currentAngle);
+    delay(15);
   }
 }
 
 void fireLaser() {
-  digitalWrite(laserPin, HIGH);       // إرسال تيار كهربائي لمنفذ الليزر لتشغيله
+  digitalWrite(laserPin, HIGH);
+  delay(500);
+  digitalWrite(laserPin, LOW);
+}
+
+// --- 3. SYSTEM LOGIC ---
+
+void autonomousMode() {
+  if (distance < 50 && distance > 0) {
+    while (distance < 50 && fireCounter < 4) {
+      fireLaser();
+      fireCounter++;
+      readSensor();
+    }
+    if (fireCounter >= 4) {
+      isAutonomous = false; 
+    }
+  } else {
+    moveServo();
+  }
+}
+
+void manualMode() {
+  if (webCommand == "LEFT") { moveServoLeft(); webCommand = ""; }
+  else if (webCommand == "RIGHT") { moveServoRight(); webCommand = ""; }
+  else if (webCommand == "SHOOT") { fireLaser(); webCommand = ""; }
+}
+
+// --- 4. SETUP & LOOP ---
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(laserPin, OUTPUT);
+  myServo.attach(servoPin);
+  
+  WiFi.softAP("ESP32_Defense", "12345678");
+  
+  server.addHandler(&events);
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/html", index_html);
+  });
+
+  server.on("/command", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (request->hasParam("val")) webCommand = request->getParam("val")->value();
+    request->send(200, "text/plain", "OK");
+  });
+
+  server.on("/mode", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (request->hasParam("val")) {
+      String mode = request->getParam("val")->value();
+      if (mode == "AUTO") { isAutonomous = true; fireCounter = 0; }
+      else { isAutonomous = false; }
+    }
+    request->send(200, "text/plain", "OK");
+  });
+
+  server.begin();
+  Serial.println("System Ready. Connect to ESP32_Defense WiFi.");
+}
+
+void loop() {
+  readSensor();
+  
+  // Send data to website every 50ms
+  static unsigned long lastUpdate = 0;
+  if (millis() - lastUpdate > 50) {
+    String sensorData = String(currentAngle) + "," + String(distance);
+    events.send(sensorData.c_str(), "radarData", millis());
+    lastUpdate = millis();
+  }
+
+  if (isAutonomous) {
+    autonomousMode();
+  } else {
+    manualMode();
+  }
 }
