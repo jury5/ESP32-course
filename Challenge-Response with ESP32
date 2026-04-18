@@ -1,0 +1,36 @@
+#include <esp_now.h>
+#include <WiFi.h>
+
+int secret_key = 9876; // كلمة سر مشتركة
+int current_challenge;
+bool authenticated = false;
+
+void OnDataRecv(const uint8_t * mac, const uint8_t *data, int len) {
+  int received_val = *((int*)data);
+
+  if (!authenticated) {
+    // إذا كان الرد يساوي (التحدي XOR السر)، إذاً الهوية صحي_حة
+    if (received_val == (current_challenge ^ secret_key)) {
+      authenticated = true;
+      Serial.println("Identity Verified! Access Granted.");
+    } else {
+      Serial.println("Authentication Failed!");
+    }
+  } else {
+    Serial.printf("Received Secure Data: %d\n", received_val);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  esp_now_init();
+  esp_now_register_recv_cb(OnDataRecv);
+
+  // توليد تحدي عشوائي وإرساله للمرسل (عبر ESP-NOW) في البداية
+  current_challenge = random(1000, 9999);
+  Serial.printf("Challenge Sent: %d\n", current_challenge);
+  // (هنا يجب إرسال current_challenge للمرسل)
+}
+
+void loop() {}
