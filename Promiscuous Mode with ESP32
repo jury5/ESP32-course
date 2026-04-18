@@ -1,0 +1,43 @@
+#include "esp_wifi.h"
+
+// دالة يتم استدعاؤها عند التقاط كل حزمة
+void wifi_sniffer_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) {
+  wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
+  
+  // الوصول إلى بيانات الحزمة الخام (802.11 Frame)
+  uint8_t* payload = pkt->payload;
+  
+  // طباعة نوع الحزمة (بناءً على الـ Type)
+  // 0: Management, 1: Control, 2: Data
+  Serial.print("Packet type: ");
+  Serial.println(type);
+  
+  // مثال: إذا كانت الحزمة طويلة بما يكفي، اطبع أول بايت (الـ Frame Control)
+  if (pkt->rx_ctrl.sig_len > 0) {
+      Serial.printf("First byte: 0x%02x\n", payload[0]);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // إعدادات الـ Wi-Fi الأولية
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  esp_wifi_init(&cfg);
+  esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  esp_wifi_set_mode(WIFI_MODE_NULL); // وضع غير متصل
+  esp_wifi_start();
+
+  // ضبط القناة التي تريد الاستماع عليها (مثلاً القناة 6)
+  esp_wifi_set_channel(6, WIFI_SECOND_CHAN_NONE);
+
+  // تفعيل وضع الترقب وتحديد الدالة المسؤولة عن معالجة الحزم
+  esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler);
+  esp_wifi_set_promiscuous(true);
+
+  Serial.println("Sniffer started on Channel 6...");
+}
+
+void loop() {
+  // لا شيء هنا، المعالجة تتم في الدالة التلقائية
+}
