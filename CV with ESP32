@@ -1,0 +1,127 @@
+import cv2
+import mediapipe as mp
+import requests
+
+ESP32_IP = "192.168.1.45"  # <-- CHANGE THIS
+
+mp_hands = mp.solutions.hands
+mp_draw = mp.solutions.drawing_utils
+
+hands = mp_hands.Hands(min_detection_confidence=0.7,
+                       min_tracking_confidence=0.7)
+
+cap = cv2.VideoCapture(0)
+
+tip_ids = [4, 8, 12, 16, 20]
+
+last_sent = -1  # avoid spamming ESP
+
+while True:
+    success, img = cap.read()
+    if not success:
+        break
+
+    img = cv2.flip(img, 1)
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    result = hands.process(rgb)
+
+    value = -1
+
+    if result.multi_hand_landmarks:
+        for handLms in result.multi_hand_landmarks:
+            lm_list = []
+
+            for id, lm in enumerate(handLms.landmark):
+                h, w, _ = img.shape
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                lm_list.append((cx, cy))
+
+            fingers = []
+
+            # Thumb
+            if lm_list[4][0] > lm_list[3][0]:
+                fingers.append(1)
+            else:
+                fingers.append(0)
+
+            # Other fingers
+            for i in range(1, 5):
+                if lm_list[tip_ids[i]][1] < lm_list[tip_ids[i] - 2][1]:
+                    fingers.append(1)
+                else:
+                    fingers.append(0)
+
+            total = sum(fingers)
+
+            if total == 0:
+                value = 0
+            elif total >= 4:
+                value = 1
+
+            mp_draw.draw_landmarks(img, handLms, mp_hands.HAND_CONNECTIONS)
+
+    # Send to ESP32 ONLY if value changed
+    if value != -1 and value != last_sent:
+        try:
+            url = f"http://{ESP32_IP}/set?value={value}"
+            requests.get(url, timeout=0.2)
+            print("Sent:", value)
+            last_sent = value
+        except:
+            print("ESP32 not reachable")
+
+    cv2.putText(img, f"Value: {value}", (50, 100),
+                cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
+
+    cv2.imshow("Hand Control", img)
+
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+
+
+//ESP32 CODE
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = "ESP32_Control";
+const char* password = "12345678";
+
+WebServer server(80);
+int outputPin = 2;
+
+void handleSet() {
+  if (server.hasArg("value")) {
+    String val = server.arg("value");
+
+    if (val == "1") {
+      digitalWrite(outputPin, HIGH);
+    } else {
+      digitalWrite(outputPin, LOW);
+    }
+
+    server.send(200, "text/plain", "OK");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(outputPin, OUTPUT);
+
+  WiFi.softAP(ssid, password);
+
+  Serial.println("AP Started");
+  Serial.print("IP: ");
+  Serial.println(WiFi.softAPIP()); // usually 192.168.4.1
+
+  server.on("/set", handleSet);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
